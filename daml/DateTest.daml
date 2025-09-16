@@ -1,0 +1,32 @@
+module DateTest where
+
+import Daml.Script
+
+data DaysOfWeek
+  = Monday
+  | Tuesday
+  | Wednesday
+  | Thursday
+  | Friday
+  | Saturday
+  | Sunday
+    deriving (Eq, Show)
+
+template Days
+  with
+    owner : Party
+    day   : DaysOfWeek
+  where 
+    signatory owner
+    observer owner
+
+day_test : Script ()
+day_test = script do
+  owner <- allocateParty "Alice"
+
+  submit owner do
+    createCmd Days with
+      owner
+      day = Tuesday
+
+  pure ()

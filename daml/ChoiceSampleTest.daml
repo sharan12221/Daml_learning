@@ -1,0 +1,40 @@
+module ChoiceSampleTest where
+
+import Daml.Script
+
+type ContactId = ContractId Contact
+
+template Contact
+  with 
+    owner : Party
+    party : Party
+    address : Text
+    telephone : Text
+
+  where
+    signatory owner
+    observer party
+
+    choice UpdateTelephone
+      : ContactId
+      with 
+        newTelephone : Text
+      
+      controller owner
+      do
+        create this with
+          telephone = newTelephone
+
+contact_test = script do
+  owner <- allocateParty "Alice"
+  party <- allocateParty "Bob"
+
+  submit owner do
+    createCmd Contact with
+      owner
+      party
+      address = "tq, aloor"
+      telephone = "9999999999"
+
+  contact <- query @Contact owner
+  debug("------------ Contact =======" <> show contact )

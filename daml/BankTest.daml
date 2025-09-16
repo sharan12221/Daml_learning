@@ -1,0 +1,66 @@
+module BankTest where    
+import Daml.Script
+
+data Bank = Bank with
+  party : Party
+  address: Text
+  telephone : Text
+    deriving (Eq, Show)
+
+data Account = Account with
+  owner : Party
+  number : Text
+  bank : Bank
+    deriving(Eq, Show)
+
+data Cash = Cash with
+  currency : Text
+  amount : Decimal
+    deriving(Eq, Show)
+
+template CashBalance
+  with
+    accountant : Party
+    cash : Cash
+    account : Account 
+  where
+    signatory accountant
+    observer account.owner, account.bank.party
+
+cash_balance_test = script do
+  accountant <- allocateParty "Bob"
+  owner <- allocateParty "Alice"
+  bank_party <- allocateParty "Bank"
+  let
+    bank = Bank with
+      party = bank_party
+      address = "High Street"
+      telephone = "012 3456 789"
+
+    account = Account with
+      owner
+      bank
+      number = "ABC123"
+    
+    cash = Cash with
+      currency = "USD"
+      amount = 100.0
+    
+  submit accountant do
+    createCmd CashBalance with 
+      accountant
+      cash
+      account 
+
+  balances <- query @CashBalance accountant
+  debug ("CashBalances visible to accountant: " <> show balances)
+
+  balancesOwner <- query @CashBalance owner
+  debug ("CashBalances visible to owner: " <> show balancesOwner)
+
+  balancesBank <- query @CashBalance bank_party
+  debug ("CashBalances visible to bank: " <> show balancesBank)
+
+  debug "CashBalance contract created successfully"
+
+  pure()
