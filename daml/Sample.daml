@@ -1,0 +1,29 @@
+module Sample where
+
+-- import Daml.Script
+
+type EmployeeId = ContractId Employee
+
+template Employee
+    with
+        issuer : Party
+        owner : Party
+        name : Text
+    where 
+        ensure name /=""
+        signatory issuer
+        observer owner
+        choice Give : EmployeeId
+            with
+                newOwner : Party
+            controller owner
+            do create this with
+                owner = newOwner
+        choice UpdateName : EmployeeId
+            with 
+                newName : Text
+            controller owner
+            do create this with
+                name = newName
+
+        

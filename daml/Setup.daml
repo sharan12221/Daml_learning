@@ -1,0 +1,20 @@
+module Setup where
+
+import Daml.Script
+
+-- Our test script
+setup : Script ()
+setup = script do
+  -- Allocate two users
+  alice <- allocatePartyWithHint "Alice" (PartyIdHint "Alice")
+  bob <- allocatePartyWithHint "Bob" (PartyIdHint "Bob")
+  aliceId <- validateUserId "alice"
+  bobId <- validateUserId "bob"
+  createUser (User aliceId (Some alice)) [CanActAs alice]
+  createUser (User bobId (Some bob)) [CanActAs bob]
+
+  -- Print them on console
+  debug ("Alice party: " <> show alice)
+  debug ("Bob party: " <> show bob)
+
+  return ()

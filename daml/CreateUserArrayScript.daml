@@ -1,0 +1,19 @@
+module CreateUserArrayScript where
+
+import Daml.Script
+
+createUsers : [Text] -> Script [Party]
+createUsers names = mapA createUserWithName names
+  where
+    createUserWithName name = do
+      party <- allocatePartyWithHint name (PartyIdHint name)
+      userId <- validateUserId (name)
+      createUser (User userId (Some party)) [CanActAs party]
+      debug ("Created user: " <> name <> " with PartyId: " <> show party)
+      return party
+
+setup : Script ()
+setup = script do
+  parties <- createUsers ["Alice1", "Bob1", "Charlie", "Charlie1"]
+  debug ("All users created: " <> show parties)
+  return ()

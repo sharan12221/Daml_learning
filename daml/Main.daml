@@ -1,0 +1,37 @@
+module Main where
+
+import Daml.Script
+
+-- Define Cash data type with derives
+data Cash = Cash with
+  currency : Text
+  amount   : Decimal
+    deriving (Eq, Ord, Show)
+
+-- Test Script
+setup : Script ()
+setup = script do
+  -- Create some sample Cash values
+  let c1 = Cash with currency = "USD"; amount = 100.0
+  let c2 = Cash with currency = "USD"; amount = 200.0
+  let c3 = Cash with currency = "EUR"; amount = 100.0
+
+  -- Equality check
+  debug ("Equality check c1 == c2 : " <> show (c1 == c2))
+  debug ("Equality check c1 == c1 : " <> show (c1 == c1))
+
+  -- Ordering check
+  debug ("Ordering check c1 < c2  : " <> show (c1 < c2))
+  debug ("Ordering check c2 > c1  : " <> show (c2 > c1))
+
+  -- Show (pretty print)
+  debug ("Show Cash c1 : " <> show c1)
+  debug ("Show Cash c3 : " <> show c3)
+
+  -- HasField (dot access)
+  debug ("c1 currency  : " <> c1.currency)
+  debug ("c1 amount    : " <> show c1.amount)
+
+  debug ("=============================    : ")
+
+  return ()
