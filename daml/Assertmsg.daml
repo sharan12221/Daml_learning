@@ -1,0 +1,31 @@
+module Assertmsg where
+
+import Daml.Script
+
+template Account 
+  with
+    owner : Party
+  where
+    signatory owner
+
+    choice Transfer
+      : ContractId Account
+      with
+        newOwner : Party
+
+      controller owner
+      do 
+        assertMsg "newOwner cannot be equal to ower." (owner /= newOwner)
+        create this with owner = newOwner
+
+transferFailedTest = script do
+  owner <- allocateParty "alice"
+
+  cid <- submit owner do
+    createCmd Account with 
+      owner
+
+  submitMustFail owner do 
+    exerciseCmd cid (Transfer with newOwner = owner)
+
+  debug ("After update owner error with same owner")

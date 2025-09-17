@@ -1,0 +1,93 @@
+module FlipCoin where
+
+import Daml.Script
+
+-- A custom data type to make the player's guess explicit and safe.
+data Guess = Heads | Tails
+  deriving(Eq, Show)
+
+template CoinFlip
+  with
+    owner : Party
+    player : Party
+    wager : Decimal
+    guess : Guess
+  where
+    -- FIX 2: Both parties must sign the contract to agree to the bet.
+    signatory owner, player
+
+    choice Flip
+      : ()
+      with
+        outcome : Bool
+      controller owner
+      do
+        let actualOutcome = if outcome then Heads else Tails
+
+        -- FIX 1: This is the first action in the sequence.
+        debug (
+          "Player guessed: " <> show guess <>
+          ". Actual outcome: " <> show actualOutcome <> "."
+          )
+
+        -- This is the second, separate action in the sequence.
+        if guess == actualOutcome
+          then debug ("Result: Player wins! Payout: " <> show (wager * 2.0))
+          else debug ("Result: Player loses! House keeps the wager: " <> show wager)
+
+        -- Since this is a consuming choice, the contract is implicitly archived.
+        -- We return () to indicate the action is complete.
+        return ()
+
+
+
+
+
+-- SCRIPT 1: Test the scenario where the player wins.
+testPlayerWins = script do
+  -- 1. Setup the parties
+  owner <- allocateParty "House"
+  player <- allocateParty "PlayerBob"
+
+  -- 2. Create the bet contract. The player guesses "Heads".
+  let playerGuess = Heads
+  debug ("Player is betting 10.0 that the coin will be " <> show playerGuess)
+
+  cid <- submitMulti [owner, player] [] do
+    createCmd CoinFlip with
+      owner
+      player
+      wager = 10.0
+      guess = playerGuess
+
+  -- 3. The owner "flops" the coin, and the outcome is Heads (True).
+  debug ("Owner is flopping the coin...")
+  submit owner do
+    exerciseCmd cid (Flip with outcome = True) -- True == Heads
+
+  pure ()
+
+
+-- SCRIPT 2: Test the scenario where the player loses.
+testPlayerLoses = script do
+  -- 1. Setup the parties
+  owner <- allocateParty "House"
+  player <- allocateParty "PlayerCharlie"
+
+  -- 2. Create the bet contract. The player guesses "Heads".
+  let playerGuess = Heads
+  debug ("Player is betting 25.0 that the coin will be " <> show playerGuess)
+
+  cid <- submitMulti [owner, player] [] do
+    createCmd CoinFlip with
+      owner
+      player
+      wager = 25.0
+      guess = playerGuess
+
+  -- 3. The owner "flops" the coin, and the outcome is Tails (False).
+  debug ("Owner is flopping the coin...")
+  submit owner do
+    exerciseCmd cid (Flip with outcome = False) -- False == Tails
+
+  pure ()

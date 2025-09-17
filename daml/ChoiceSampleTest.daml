@@ -2,8 +2,6 @@ module ChoiceSampleTest where
 
 import Daml.Script
 
-type ContactId = ContractId Contact
-
 template Contact
   with 
     owner : Party
@@ -16,7 +14,7 @@ template Contact
     observer party
 
     choice UpdateTelephone
-      : ContactId
+      : ContractId Contact
       with 
         newTelephone : Text
       
@@ -25,16 +23,45 @@ template Contact
         create this with
           telephone = newTelephone
 
+    choice UpdateAddress
+      : ContractId Contact
+      with 
+        newAddress : Text
+      
+      controller owner
+      do
+        create this with
+          address = newAddress
+        
 contact_test = script do
   owner <- allocateParty "Alice"
   party <- allocateParty "Bob"
 
-  submit owner do
+--   submit owner do
+--     createCmd Contact with
+--       owner
+--       party
+--       address = "tq, aloor"
+--       telephone = "9999999999"
+
+--   contact <- query @Contact owner
+--   debug("------------ Contact =======" <> show contact )
+  
+  -- Step 1: Create initial Contact
+  cid <- submit owner do
     createCmd Contact with
       owner
       party
       address = "tq, aloor"
       telephone = "9999999999"
 
-  contact <- query @Contact owner
-  debug("------------ Contact =======" <> show contact )
+  debug ("Created Contact contract id: " <> show cid)
+
+
+  -- Step 2: Call the UpdateTelephone choice
+  cid2 <- submit owner do
+    exerciseCmd cid (UpdateTelephone with newTelephone = "8888888888")
+
+  debug ("After UpdateTelephone, new contract id: " <> show cid2)
+
+  pure ()

@@ -1,0 +1,157 @@
+module MultiTampleteDemo1 where
+
+import Daml.Script
+import DA.Date
+
+data Cash = Cash with 
+  currency      : Text
+  amount        : Decimal
+    deriving(Eq, Show)
+
+template Account 
+  with 
+    bank        : Party
+    user        : Party
+    accountNo   : Text
+    cash        : Cash
+  where
+    signatory bank, user
+    
+    choice ViewBalance
+      : Cash
+      controller user
+      do
+        return cash
+    
+    choice CreditBalance
+      : ContractId Account
+      with 
+        creditAmt : Decimal
+     
+      controller bank
+      do
+        now <- getTime
+        let today = toDateUTC now
+        let day = dayOfWeek today
+
+        assertMsg "Transactions are not allowed on Sunday." (day /= Sunday)
+        assertMsg "Credit amount must be greater than 0" (creditAmt > 0.0)
+        create this with 
+          cash.amount = cash.amount + creditAmt
+           
+    choice DebitBalance 
+      : ContractId Account
+      with
+        debitAmt : Decimal
+      
+      controller bank
+      do
+        now <- getTime
+        let today = toDateUTC now
+        let day = dayOfWeek today
+
+        assertMsg "Transactions are not allowed on Sunday." (day /= Sunday)
+        assertMsg "Debit amount must be greater than 0 and less then user current balance" (debitAmt > 0.0 && debitAmt <= cash.amount)
+        create this with
+          cash.amount = cash.amount - debitAmt
+      
+-- #############################
+-- script for test check balance  
+scriptCheckBalance = script do
+  bank <- allocateParty "bank"
+  user <- allocateParty "user"
+
+  let 
+    cashBal = Cash with 
+      currency = "USD"
+      amount = 1230.51
+  
+  cid <- submitMulti [bank, user] [] do
+    createCmd Account with
+      bank
+      user     
+      accountNo = "12345"
+      cash = cashBal     
+
+  
+  balance <- submit user do 
+    exerciseCmd cid (ViewBalance)
+  
+  debug ("Cash: " <> show balance)
+
+  pure()
+
+-- #############################
+-- script for test Deposit amout 
+scriptDepositBalance = script do
+  debug ("-------------------IF you are running this script on sunday so this will fail because we set the condition on sunday no debit and credit allowed !!!!!!!!!!!!!!!!!!!!!!! ")
+  bank <- allocateParty "bank"
+  user <- allocateParty "user"
+
+  let
+    cashBal = Cash with 
+      currency = "USD"
+      amount = 500000.0
+    
+    creditAmount = 50.0
+                                                                                                                             
+  cid <- submitMulti [bank, user] [] do
+    createCmd Account with
+      bank
+      user 
+      accountNo = "123456"
+      cash = cashBal
+
+  debug ("Account create: " <> show cid)
+
+  account_v2_cid <- submit bank do
+    exerciseCmd cid (CreditBalance with creditAmt = creditAmount)
+
+  debug ("New account contract ID after credit: " <> show account_v2_cid)
+
+  balance <- submit user do
+    exerciseCmd account_v2_cid ViewBalance
+  
+  debug ("Current Cash Balance: " <> show balance)
+
+  pure()                                            
+
+-- #############################
+-- script for test debeit amout 
+scriptDebitBalance = script do
+  debug ("-----------------IF you are running this script on sunday so this will fail because we set the condition on sunday no debit and credit allowed !!!!!!!!!!!!!!!!!!!!!!! ")
+
+  bank <- allocateParty "bank"
+  user <- allocateParty "user"
+
+  let 
+    cashBal = Cash with
+      currency = "USD"
+      amount = 100.0
+    
+    debitAmtBal1 = 150.0
+    debitAmtBal2 = 10.0
+
+  cid <- submitMulti [bank, user] [] do
+    createCmd Account with
+      bank
+      user
+      accountNo = "123456"
+      cash = cashBal
+    
+  debug ("New Account Cid: " <> show cid)
+
+  cid_v2 <- submitMustFail bank do
+    exerciseCmd cid (DebitBalance with debitAmt = debitAmtBal1)
+
+  debug ("cid_v2 Failed Successfully :" <> show cid_v2)
+
+  cid_v3 <- submit bank do
+    exerciseCmd cid (DebitBalance with debitAmt = debitAmtBal2)
+
+  debug ("cid_v3 debit Successfully :" <> show cid_v3)
+
+  balanceCash <- submit user do
+    exerciseCmd cid_v3 (ViewBalance)
+
+  debug ("Cash Balance: " <> show balanceCash)

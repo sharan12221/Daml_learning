@@ -1,0 +1,65 @@
+module TimeDate where
+
+import Daml.Script
+import DA.Date
+import DA.Time
+
+template RedeemService 
+  with
+    owner : Party
+  where
+    signatory owner
+    choice Redeem
+      : ()
+      controller owner
+      do 
+        now <- getTime
+        let 
+          today = toDateUTC now 
+          dow = dayOfWeek today
+          timeofday = now `subTime` time today 0 0 0
+          hrs = convertRelTimeToMicroseconds timeofday / 3600000000
+        if (hrs < 8 || hrs > 18)
+          then abort $ "Cannot redeem outside business hours. Current time: " <> show timeofday
+          else case dow of
+            Saturday -> abort "Cannot redeem on a Saturday."
+            Sunday -> abort "Cannot redeem on a Sunday."
+            _ -> return ()
+
+
+testRedeem = script do
+  owner <- allocateParty "Alice"
+
+  cid <- submit owner do
+    createCmd RedeemService with
+      owner
+    
+  debug "Successfully Tested Redeem...................."
+
+--   cid2 <- submit owner do
+--     exerciseCmd cid (Redeem)
+
+--   debug ("Successfully Tested Redeem at time date...................." <> show cid2)
+
+  pure ()
+
+
+testRedeemFail = script do
+--   setTime (time (date 2019 Jun 1) 0 0 0)
+
+  owner <- allocateParty "Alice"
+
+  cid <- submit owner do
+    createCmd RedeemService with
+      owner
+    
+  debug ("Successfully Tested Redeem...................." <> show cid)
+
+--   passTime (hours 12)
+
+  cid2 <- submitMustFail owner do
+    exerciseCmd cid (Redeem)
+
+  debug ("Successfully Tested Redeem at time date...................." <> show cid2)
+
+  pure ()

@@ -14,6 +14,6 @@ createUserWithName name = do
 -- Setup script using two names (but you can change easily)
 setup : Script ()
 setup = script do
-  alice <- createUserWithName "Alice2"
-  bob   <- createUserWithName "Bob2"
+  alice <- createUserWithName "Alice"
+  bob   <- createUserWithName "Bob"
   return ()

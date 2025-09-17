@@ -1,0 +1,108 @@
+module MultiTamlete where
+
+import Daml.Script
+
+-- It's better to model Cash as a 'data' record since it's just a container for information.
+data Cash = Cash with
+  amount : Decimal
+  currency : Text
+    deriving(Eq, Show)
+
+-- This template represents an accepted IOU that exists on the ledger.
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    cash : Cash
+  where
+    signatory issuer, owner
+
+    -- A choice on the Iou contract to propose transferring it to someone else.
+    -- This creates the proposal contract.
+    choice ProposeTransfer
+      : ContractId IouTransferProposal
+      with
+        newOwner : Party
+      controller owner
+      do
+        assertMsg "The new owner cannot be the same as the current owner." (owner /= newOwner)
+        create IouTransferProposal with
+          iou = this
+          newOwner
+
+-- This template represents an active proposal to transfer an existing IOU.
+template IouTransferProposal
+  with
+    iou : Iou           -- The Iou contract data.
+    newOwner : Party    -- The party the Iou is being offered to.
+  where
+    -- The signatories of the original Iou must sign off on the proposal.
+    signatory iou.issuer, iou.owner
+    -- The potential new owner should be an observer so they can see the offer.
+    observer newOwner
+
+    -- Choice for the current owner to cancel their own proposal.
+    choice IouTransferProposal_Cancel
+      : ContractId Iou  -- Returns the original Iou's ContractId.
+      controller iou.owner
+      do
+        -- Abort the proposal by recreating the original Iou.
+        -- This isn't strictly necessary but shows the proposal is void.
+        create iou
+
+    -- Choice for the new owner to formally reject the offer.
+    choice IouTransferProposal_Reject
+      : ()
+      controller newOwner
+      do
+        -- This choice just archives the proposal, returning nothing.
+        return ()
+
+    -- Choice for the new owner to accept the transfer.
+    choice IouTransferProposal_Accept
+      : ContractId Iou -- Returns the ContractId of the newly created Iou.
+      controller newOwner
+      do
+        -- Create a new Iou contract with the owner updated.
+        create iou with
+          owner = newOwner
+
+-- A script demonstrating the full, logical workflow.
+testScript = script do
+  -- 1. Allocate all parties involved.
+  alice <- allocateParty "Alice"
+  bob <- allocateParty "Bob"
+  charlie <- allocateParty "Charlie"
+
+  -- 2. Alice issues an IOU to herself. This is the starting asset.
+  iou1_cid <- submitMulti [alice] [] do
+    createCmd Iou with
+      issuer = alice
+      owner = alice
+      cash = Cash with amount = 100.0, currency = "USD"
+  debug "Step 1: Alice created an IOU for herself."
+
+  -- 3. Alice (the owner) proposes to transfer her IOU to Bob.
+  -- This is done by exercising a choice ON THE IOU CONTRACT.
+  proposal_ab_cid <- submit alice do
+    exerciseCmd iou1_cid (ProposeTransfer with newOwner = bob)
+  debug "Step 2: Alice proposed to transfer the IOU to Bob."
+
+  -- 4. Bob (the newOwner) accepts the proposal.
+  -- This archives the proposal and creates a new IOU owned by Bob.
+  iou2_cid <- submit bob do
+    exerciseCmd proposal_ab_cid IouTransferProposal_Accept
+  debug "Step 3: Bob accepted the transfer. A new IOU is created."
+
+  -- 5. Bob now owns the new IOU and proposes to transfer it to Charlie.
+  proposal_bc_cid <- submit bob do
+    exerciseCmd iou2_cid (ProposeTransfer with newOwner = charlie)
+  debug "Step 4: Bob proposed to transfer his IOU to Charlie."
+
+  -- 6. Charlie accepts the proposal from Bob.
+  iou3_cid <- submit charlie do
+    exerciseCmd proposal_bc_cid IouTransferProposal_Accept
+  debug "Step 5: Charlie accepted the transfer. The final IOU is created."
+
+  pure ()
+

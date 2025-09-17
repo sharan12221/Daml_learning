@@ -1,0 +1,78 @@
+module SimpleCashModel where
+
+import Daml.Script
+
+data Cash = Cash with
+  amount : Decimal
+  currency : Text
+    deriving (Eq, Show)
+
+template SimpleCashModel
+  with
+    issuer : Party
+    owner : Party
+    cash : Cash
+  where
+    signatory issuer
+    observer owner
+
+    -- Correct way: Combine all conditions in one 'ensure' block using '&&'
+    ensure cash.amount > 0.0 && cash.currency == "USD"
+
+-- The test scripts remain the same and will work correctly with this fix.
+
+-- Test for the amount validation
+testAmountFails = script do
+  owner <- allocateParty "alice"
+  issuer <- allocateParty "bob"
+
+  let
+    invalidCash = Cash with
+      amount = 0.0
+      currency = "USD"
+
+  submitMustFail issuer do
+    createCmd SimpleCashModel with
+      issuer
+      owner
+      cash = invalidCash
+
+  debug "Successfully tested that creating cash with a zero amount fails."
+  pure ()
+
+-- Test for the currency validation
+testCurrencyFails = script do
+  owner <- allocateParty "alice"
+  issuer <- allocateParty "bob"
+
+  let
+    invalidCash = Cash with
+      amount = 100.0
+      currency = "EUR"
+
+  submitMustFail issuer do
+    createCmd SimpleCashModel with
+      issuer
+      owner
+      cash = invalidCash
+
+  debug "Successfully tested that creating cash with a non-USD currency fails."
+  pure ()
+
+testSuccess = script do
+  owner <- allocateParty "alice"
+  issuer <- allocateParty "bob"
+
+  let
+    correctcash = Cash with
+      amount = 100.0
+      currency = "USD"
+    
+  submit issuer do 
+    createCmd SimpleCashModel with
+      issuer
+      owner
+      cash = correctcash
+  
+  debug "Successfully tested that creating cash with a USD currency."
+  pure ()
