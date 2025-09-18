@@ -1,0 +1,25 @@
+module KeyAndMaintainer where
+
+import Daml.Script
+import DA.Optional -- Good practice to import for clarity
+
+template UserAccount
+  with
+    operator    : Party
+    username    : Text
+    fullname    : Text
+    followers   : Int
+  where
+    signatory operator
+
+    key (operator, username) : (Party, Text)
+    maintainer key._1
+
+    choice UpdateFullName
+      : ContractId UserAccount
+      with
+        newFullName : Text
+      controller operator
+      do
+        -- This is correct: update the 'fullname' field with the 'newFullName' argument.
+        create this with fullname = newFullName
