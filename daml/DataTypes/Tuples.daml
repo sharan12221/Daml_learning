@@ -1,0 +1,30 @@
+module Tuples where
+
+import DA.Tuple
+import Daml.Script
+
+tuple_test = script do
+  let
+    my_key_value = ("Key", 1)
+    my_coordinate = (1.0 : Decimal, 2.0 : Decimal, 3.0 : Decimal)
+
+  -- FIX: Add parentheses to group the function calls before 'show'
+  debug ("fst my_key_value: " <> show (fst my_key_value))
+  debug ("snd my_key_value: " <> show (snd my_key_value))
+  debug ("my_key_value._1: " <> show my_key_value._1)
+  debug ("my_key_value._2: " <> show my_key_value._2)
+
+  debug ("fst3 my_coordinate: " <> show (fst3 my_coordinate))
+  debug ("snd3 my_coordinate: " <> show (snd3 my_coordinate))
+  debug ("snd3 my_coordinate: " <> show (thd3 my_coordinate))
+  debug ("fst3 my_coordinate: " <> show my_coordinate._1)
+  debug ("snd3 my_coordinate: " <> show my_coordinate._2)
+  debug ("snd3 my_coordinate: " <> show my_coordinate._3)
+
+  assert (fst my_key_value == "Key")
+  assert (snd my_key_value == 1)
+  assert (my_key_value._1 == "Key")
+  assert (my_key_value._2 == 1)
+
+  assert (my_coordinate == (fst3 my_coordinate, snd3 my_coordinate, thd3 my_coordinate))
+  assert (my_coordinate == (my_coordinate._1, my_coordinate._2, my_coordinate._3))
