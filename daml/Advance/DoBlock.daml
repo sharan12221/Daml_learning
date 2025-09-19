@@ -1,0 +1,64 @@
+module DoBlock where
+
+import Daml.Script
+
+template Iou
+  with
+    owner   : Party
+    issuer  : Party
+  where 
+    signatory owner
+    observer issuer
+ 
+    choice NewOwner 
+      : ContractId Iou
+      with 
+        newOwner : Party
+
+      controller owner
+      do
+        assertMsg "newOwner cannot be same as owner" (owner /= newOwner)
+        create this with owner = newOwner
+
+template IouProposal
+  with
+    iou : Iou
+  where
+    signatory iou.issuer
+    observer iou.owner
+
+    choice IouProposal_Accept
+      : ContractId Iou
+      controller iou.owner
+      do
+        create iou
+
+test = script do
+  owner <- allocateParty "alice"
+  issuer <- allocateParty "bob"
+  charlie <- allocateParty "charlie" -- A third party to be the new owner
+
+  -- 1. Create the proposal data
+  let
+    iouProposalData = Iou with owner, issuer
+
+  -- 2. The issuer creates the proposal contract
+  cidIouProposal <- submit issuer do
+    createCmd IouProposal with
+      iou = iouProposalData
+  debug ("IouProposal created: " <> show cidIouProposal)
+
+  -- 3. The owner accepts the proposal, creating the final Iou contract
+  -- FIX: Correct syntax for exercising a choice with no arguments
+  iouCid <- submit owner do
+    exerciseCmd cidIouProposal IouProposal_Accept
+  debug ("Iou created from proposal: " <> show iouCid)
+
+  -- 4. The original owner now transfers the Iou to a new owner (charlie)
+  -- FIX: Exercising the 'NewOwner' choice on the correct 'Iou' contract ID ('iouCid')
+  -- FIX: Using the correct argument name 'newOwner'
+  newIouCid <- submitMustFail owner do
+    exerciseCmd iouCid (NewOwner with newOwner = charlie)
+  debug ("Iou transferred to new owner. New Iou cid: " <> show newIouCid)
+
+  pure ()

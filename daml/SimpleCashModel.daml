@@ -1,6 +1,7 @@
 module SimpleCashModel where
 
 import Daml.Script
+import DA.Text as T
 
 data Cash = Cash with
   amount : Decimal
@@ -17,7 +18,7 @@ template SimpleCashModel
     observer owner
 
     -- Correct way: Combine all conditions in one 'ensure' block using '&&'
-    ensure cash.amount > 0.0 && cash.currency == "USD"
+    ensure cash.amount > 0.0 && cash.currency == "USD" && T.isUpper cash.currency
 
 -- The test scripts remain the same and will work correctly with this fix.
 
