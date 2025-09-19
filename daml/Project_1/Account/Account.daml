@@ -1,0 +1,93 @@
+module Project_1.Account.Account where
+
+-- import Project_1.TestingScript
+
+
+import DA.Action
+import DA.Exception
+
+template Iou 
+  with 
+    issuer  : Party
+    owner   : Party
+    amount  : Decimal
+  where 
+    signatory issuer, owner
+
+template Account 
+  with 
+    issuer  : Party
+    owner   : Party
+    amount  : Decimal
+  where
+    signatory issuer, owner
+    ensure amount > 0.0
+    key (issuer, owner) : (Party, Party)
+    maintainer key._2
+
+    choice Transfer : () with
+        newOwner : Party
+        transferredAmount : Decimal
+      controller owner, newOwner
+      do create this with amount = amount - transferredAmount
+         create Iou with issuer = issuer, owner = newOwner, amount = transferredAmount
+         pure ()
+
+    choice TransferLimited : () 
+      with 
+        newOwner          : Party
+        transferredAmount : Decimal
+      controller newOwner, owner
+      do 
+        let 
+          limit = 50.0
+        
+        when (transferredAmount > limit) $
+          throw TransfereLimitExceeded with
+            limit = limit
+            attempted = transferredAmount
+        create this with amount = amount - transferredAmount
+        create Iou with issuer = issuer, owner = newOwner, amount = transferredAmount
+        pure ()
+
+
+
+
+-----------------------------------------------------------------
+-----------------------------------------------------------------
+----------------------Custom Execptions--------------------------
+-----------------------------------------------------------------
+-----------------------------------------------------------------
+-- We define this through a helper contract so the `try-catch` happens entirely
+-- ledger-side.
+template TestThrewTransferLimitExceeded
+  with
+    owner : Party
+    newOwner : Party
+  where
+    signatory owner, newOwner
+    choice TestThrewTransferLimitExceededChoice : ()
+      with accountId : ContractId Account
+      controller owner, newOwner
+      do
+        threwTransferLimitExceeded <- do
+          try do
+            -- this must throw since `limit` is hardcoded to `50.0`
+            -- in `TransferLimited`
+            exercise accountId (TransferLimited newOwner 100.0)
+            pure False
+          catch
+            TransfereLimitExceeded _ _ -> pure True
+        unless threwTransferLimitExceeded $
+          error "expected TransfereLimitExceeded exception"
+
+
+
+-- Customized Exceptions 
+exception TransfereLimitExceeded
+  with 
+    limit     : Decimal
+    attempted : Decimal
+  where 
+    message "Transfer of" <> show attempted <> "exceed limit of " <> show limit
+

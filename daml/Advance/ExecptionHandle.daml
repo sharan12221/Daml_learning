@@ -4,7 +4,6 @@ import DA.Action
 import Daml.Script
 import DA.Exception
 import DA.Assert ((===))
-import DA.Assert
 
 template Iou 
   with 
@@ -43,7 +42,7 @@ template Account
           limit = 50.0
         
         when (transferredAmount > limit) $
-          throw TransfereLimitExceeded with
+          throw TransferLimitExceeded with
             limit = limit
             attempted = transferredAmount
         create this with amount = amount - transferredAmount
@@ -106,7 +105,7 @@ template Shop
             owner = owner
             amount = price
           pure()
-        TransfereLimitExceeded _ _ -> do
+        TransferLimitExceeded _ _ -> do
           create Iou with
             issuer = shopper
             owner = owner
@@ -125,16 +124,12 @@ template Order
     signatory shopOwner, shopper
 
 
--- Customized Exceptions 
-exception TransfereLimitExceeded
-  with 
-    limit     : Decimal
-    attempted : Decimal
-  where 
-    message "Transfer of" <> show attempted <> "exceed limit of " <> show limit
 
-
-
+-----------------------------------------------------------------
+-----------------------------------------------------------------
+-----------------------Testing Scripts---------------------------
+-----------------------------------------------------------------
+-----------------------------------------------------------------
 test = script do
   bank      <- allocateParty "Bank"
   alice     <- allocateParty "Alice"
@@ -161,17 +156,88 @@ test = script do
   debug ("aliceAccount :========" <> show aliceAccount)
   aliceAccount.amount === 1000.0
 
-  submit alice $ exerciseCmd shop (OrderItemTrusted alice)
-
+  -- submit alice $ exerciseCmd shop (OrderItemTrusted alice)
   submit alice $ exerciseCmd shop (OrderItemTrusted alice)
 
   ((_, aliceAccount)::_) <- query @Account alice
   debug ("aliceAccount :========" <> show aliceAccount)
   aliceAccount.amount === 900.0
 
+  iouContracts <- query @Iou bank
+  debug ("bankIou :========" <> show iouContracts)
+  -- bankIou === Iou with issuer = bank, owner = shopOwner, amount = 100.0
+
+  submit alice $ exerciseCmd shop (OrderItemTrustedLimited alice)
+  -- This one doesn't pass, so the balance is still 900
+  ((_, aliceAccount)::_) <- query @Account alice
+  aliceAccount.amount === 900.0
+  -- and the newly created Iou is in Alice's name instead of her bank's
+  [(_, aliceIou)] <- query @Iou alice
   [(_, bankIou)] <- query @Iou bank
-  debug ("bankIou :========" <> show bankIou)
+  aliceIou === Iou with issuer = alice, owner = shopOwner, amount = 100.0
   bankIou === Iou with issuer = bank, owner = shopOwner, amount = 100.0
 
-
   pure ()
+
+
+
+test2 = script do
+  bank <- allocateParty "Bank"
+  alice <- allocateParty "Alice"
+  shopOwner <- allocateParty "ShopOwner"
+
+  aliceAccountId <-
+    submitMulti [bank, alice] [] $ createCmd Account with
+      issuer = bank
+      owner = alice
+      amount = 1000.0
+
+  submitMulti [alice, shopOwner] [] $
+    createAndExerciseCmd
+      (TestThrewTransferLimitExceeded with
+        owner = alice
+        newOwner = shopOwner)
+      (TestThrewTransferLimitExceededChoice with
+        accountId = aliceAccountId)
+
+
+
+-----------------------------------------------------------------
+-----------------------------------------------------------------
+----------------------Custom Execptions--------------------------
+-----------------------------------------------------------------
+-----------------------------------------------------------------
+
+-- We define this through a helper contract so the `try-catch` happens entirely
+-- ledger-side.
+template TestThrewTransferLimitExceeded
+  with
+    owner : Party
+    newOwner : Party
+  where
+    signatory owner, newOwner
+    choice TestThrewTransferLimitExceededChoice : ()
+      with accountId : ContractId Account
+      controller owner, newOwner
+      do
+        threwTransferLimitExceeded <- do
+          try do
+            -- this must throw since `limit` is hardcoded to `50.0`
+            -- in `TransferLimited`
+            exercise accountId (TransferLimited newOwner 100.0)
+            pure False
+          catch
+            TransferLimitExceeded _ _ -> pure True
+        unless threwTransferLimitExceeded $
+          error "expected TransferLimitExceeded exception"
+
+
+
+-- Customized Exceptions 
+exception TransferLimitExceeded
+  with 
+    limit     : Decimal
+    attempted : Decimal
+  where 
+    message "Transfer of" <> show attempted <> "exceed limit of " <> show limit
+
